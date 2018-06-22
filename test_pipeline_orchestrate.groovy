@@ -25,6 +25,6 @@ node{
           python.setupPepperVirtualenv(venvPepper, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
           }
         stage ("Running salt state") {
-          orchestrate.RunTestSaltCmd(venvPepper)
+          orchestrate.RunTestSaltOrchestrate(venvPepper)
           }
 }

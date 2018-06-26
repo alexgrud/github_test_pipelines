@@ -25,6 +25,7 @@ node{
           python.setupPepperVirtualenv(venvPepper, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
           }
         stage ("Running get config") {
-          orchestrate.RunTestGetConfig(venvPepper)
+          def _orch = orchestrate.RunTestGetConfig(venvPepper)
+          println(_orch)
           }
 }

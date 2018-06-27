@@ -34,7 +34,7 @@ node{
           }
           def _orch_app_sorted = common.SortMapByValueAsc(_orch_app)
           println(_orch_app_sorted.keySet())
-
+          def out = orchestrate.OrchestrateOpenstackApplications(venvPepper, 'I@salt:master', _orch_app_sorted.keySet())
           }
           }
 }

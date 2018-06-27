@@ -26,6 +26,14 @@ node{
           }
         stage ("Running get config") {
           def _orch = orchestrate.RunTestGetConfig(venvPepper, 'orchestration.deploy.applications')
-          println(_orch)
+          if ( !_orch['return'].isEmpty() ) {
+          Map<String,Integer> _orch_app = [:]
+          //println(_orch_app['cinder'])
+          for (k in _orch['return'][0].values()[0].keySet()) {
+              _orch_app[k] = _orch['return'][0].values()[0][k].values()[0].toInteger()
+          }
+          def _orch_app_sorted = common.SortMapByValueAsc(_orch_app)
+          println(_orch_app_sorted.keySet())
+          }
           }
 }

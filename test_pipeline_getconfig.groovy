@@ -26,7 +26,7 @@ node{
           }
         stage ("Running get config") {
           def _orch = salt.getConfig(venvPepper, 'I@salt:master', 'orchestration.deploy.applications')
-          if ( !_orch['return'].isEmpty() ) {
+          if ( !_orch['return'][0].values()[0].isEmpty() ) {
           Map<String,Integer> _orch_app = [:]
           //println(_orch_app['cinder'])
           for (k in _orch['return'][0].values()[0].keySet()) {

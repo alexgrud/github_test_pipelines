@@ -3,7 +3,7 @@
 common = new com.mirantis.mk.Common_test()
 python = new com.mirantis.mk.Python()
 orchestrate = new com.mirantis.mk.Orchestrate_test()
-salt = new com.mirantis.mk.Salt_test()
+salt = new com.mirantis.mk.Salt()
 def venv
 def venvPepper
 def outputs = [:]

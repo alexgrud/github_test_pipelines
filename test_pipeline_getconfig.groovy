@@ -1,8 +1,8 @@
 // Expected parameters:
 //   SALT_MASTER_HOST
-common = new com.mirantis.mk.Common_test()
+common = new com.mirantis.mk.Common()
 python = new com.mirantis.mk.Python()
-orchestrate = new com.mirantis.mk.Orchestrate_test()
+orchestrate = new com.mirantis.mk.Orchestrate()
 salt = new com.mirantis.mk.Salt()
 def venv
 def venvPepper
@@ -24,17 +24,28 @@ node{
           // Setup virtualenv for pepper
           python.setupPepperVirtualenv(venvPepper, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
           }
-        stage ("Running get config") {
-          def _orch = salt.getConfig(venvPepper, 'I@salt:master', 'orchestration.deploy.applications')
-          if ( !_orch['return'][0].values()[0].isEmpty() ) {
-          Map<String,Integer> _orch_app = [:]
+        //stage ("Running get config") {
+          //def _orch = salt.getConfig(venvPepper, 'I@salt:master', 'orchestration.deploy.applications')
+          //if ( !_orch['return'][0].values()[0].isEmpty() ) {
+          //Map<String,Integer> _orch_app = [:]
           //println(_orch_app['cinder'])
-          for (k in _orch['return'][0].values()[0].keySet()) {
-              _orch_app[k] = _orch['return'][0].values()[0][k].values()[0].toInteger()
-          }
-          def _orch_app_sorted = common.SortMapByValueAsc(_orch_app)
-          println(_orch_app_sorted.keySet())
-          def out = orchestrate.OrchestrateOpenstackApplications(venvPepper, 'I@salt:master', _orch_app_sorted.keySet())
-          }
-          }
+          //for (k in _orch['return'][0].values()[0].keySet()) {
+        //      _orch_app[k] = _orch['return'][0].values()[0][k].values()[0].toInteger()
+        //  }
+        //  def _orch_app_sorted = common.SortMapByValueAsc(_orch_app)
+        //  println(_orch_app_sorted.keySet())
+        //  def out = orchestrate.OrchestrateOpenstackApplications(venvPepper, 'I@salt:master', _orch_app_sorted.keySet())
+        //  }
+         // }
+         stage ("Running get config") {
+       //   salt.orchestratePrePost(venvPepper, 'orchestrate:post_finalize', extra_tgt = '')
+       def pillar = salt.getPillar(venvPepper, 'ctl01*', 'orchestrate:post_finalize')
+       println(pillar)
+       println(pillar['return'][0].values())
+       for ( orch_id in pillar['return'][0].values() ) {
+                    def orchestrator = orch_id.values()['orchestrator']
+                    println(orchestrator)
+                    salt.orchestrateSystem(venvPepper, ['expression': 'I@salt:master', 'type': 'compound'], [orchestrator])
+         }
+         }
 }

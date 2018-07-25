@@ -8,6 +8,21 @@ def venv
 def venvPepper
 def outputs = [:]
 def extra_tgt = ""
+def getOrchestrationApplications() {
+  def _orch = salt.getConfig(venvPepper, "I@salt:master ${extra_tgt}", "orchestration.deploy.applications")
+          if ( !_orch['return'][0].values()[0].isEmpty() ) {
+          Map<String,Integer> _orch_app = [:]
+            for (k in _orch['return'][0].values()[0].keySet()) {
+              _orch_app[k] = _orch['return'][0].values()[0][k].values()[0].toInteger()
+            }
+          def _orch_app_sorted = common.SortMapByValueAsc(_orch_app)
+          println(_orch_app_sorted.keySet())
+          def out = orchestrate.OrchestrateApplications(venvPepper, "I@salt:master ${extra_tgt}", _orch_app_sorted.keySet())
+          }
+          else {
+            common.infoMsg("No applications found for orchestration")
+          }
+}
 node{
     stage ("Preparing data") {
         def workspace = common.getWorkspace()
@@ -26,19 +41,8 @@ node{
           python.setupPepperVirtualenv(venvPepper, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
           }
         stage ("Running get config") {
-          def _orch = salt.getConfig(venvPepper, "I@salt:master ${extra_tgt}", "orchestration.deploy.applications")
-          if ( !_orch['return'][0].values()[0].isEmpty() ) {
-          Map<String,Integer> _orch_app = [:]
-            for (k in _orch['return'][0].values()[0].keySet()) {
-              _orch_app[k] = _orch['return'][0].values()[0][k].values()[0].toInteger()
-            }
-          def _orch_app_sorted = common.SortMapByValueAsc(_orch_app)
-          println(_orch_app_sorted.keySet())
-          def out = orchestrate.OrchestrateApplications(venvPepper, "I@salt:master ${extra_tgt}", _orch_app_sorted.keySet())
-          }
-          else {
-            common.infoMsg("No applications found for orchestration")
-          }
+          getOrchestrationApplications()
+          
           }
          
 }

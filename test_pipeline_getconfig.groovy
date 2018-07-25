@@ -36,6 +36,9 @@ node{
           println(_orch_app_sorted.keySet())
           def out = orchestrate.OrchestrateApplications(venvPepper, "I@salt:master ${extra_tgt}", _orch_app_sorted.keySet())
           }
+          else {
+            common.infoMsg("No applications found for orchestration")
+          }
           }
          
 }

@@ -20,7 +20,12 @@ node{
         println(SALT_MASTER_URL)
         SALT_MASTER_CREDENTIALS="salt-qa-credentials"
         println(SALT_MASTER_CREDENTIALS)
-        def getOrchestrationApplications() {
+        
+    }
+        stage ("installing virtualenv Pepper") {
+          // Setup virtualenv for pepper
+          python.setupPepperVirtualenv(venvPepper, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
+          def getOrchestrationApplications() {
           def _orch = salt.getConfig(venvPepper, "I@salt:master ${extra_tgt}", "orchestration.deploy.applications")
             if ( !_orch['return'][0].values()[0].isEmpty() ) {
               Map<String,Integer> _orch_app = [:]
@@ -35,10 +40,6 @@ node{
             common.infoMsg("No applications found for orchestration")
           }
         }
-    }
-        stage ("installing virtualenv Pepper") {
-          // Setup virtualenv for pepper
-          python.setupPepperVirtualenv(venvPepper, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
           }
         stage ("Running get config") {
           getOrchestrationApplications()

@@ -37,6 +37,7 @@
  *   REMOVE_PKGS                Space separated list of pkgs=versions to be removed on physical targeted machines (ex. pkg_name1=pkg_version1 pkg_name2=pkg_version2)
  *   RESTORE_GALERA             Restore Galera DB (bool)
  *   RESTORE_CONTRAIL_DB        Restore Cassandra and Zookeeper DBs for OpenContrail (bool)
+ *   RUN_CVP_TESTS              Run cloud validation pipelines before and after upgrade
  *
 **/
 def common = new com.mirantis.mk.Common()
@@ -707,13 +708,26 @@ def restoreContrailDb(pepperEnv) {
 def verifyAPIs(pepperEnv, target) {
     def salt = new com.mirantis.mk.Salt()
     def common = new com.mirantis.mk.Common()
-    def out = salt.cmdRun(pepperEnv, target, '. /root/keystonercv3; openstack service list; openstack image list; openstack flavor list; openstack compute service list; openstack server list; openstack network list; openstack volume list; openstack orchestration service list')
-    if (out.toString().toLowerCase().contains('error')) {
-        common.errorMsg(out)
-        if (INTERACTIVE.toBoolean()) {
-            input message: "APIs are not working as expected. Please fix it manually."
-        } else {
-            throw new Exception("APIs are not working as expected")
+    def cmds = ["openstack service list",
+                "openstack image list",
+                "openstack flavor list",
+                "openstack compute service list",
+                "openstack server list",
+                "openstack network list",
+                "openstack volume list",
+                "openstack orchestration service list"]
+    def sourcerc = ". /root/keystonercv3;"
+    def cmdOut = ">/dev/null 2>&1;echo \$?"
+    for (c in cmds) {
+        def command = sourcerc + c + cmdOut
+        def out = salt.cmdRun(pepperEnv, target, "${command}")
+        if (!out.toString().toLowerCase().contains('0')) {
+            common.errorMsg(out)
+            if (INTERACTIVE.toBoolean()) {
+                input message: "APIs are not working as expected. Please fix it manually."
+            } else {
+                throw new Exception("APIs are not working as expected")
+            }
         }
     }
 }
@@ -827,6 +841,14 @@ def verifyCephOsds(pepperEnv, target) {
 timeout(time: 12, unit: 'HOURS') {
     node() {
         try {
+            if(RUN_CVP_TESTS.toBoolean() == True){
+                stage('Run CVP tests before upgrade.') {
+                    build job: "cvp-sanity"
+                    build job: "cvp-func"
+                    build job: "cvp-ha"
+                    build job: "cvp-perf"
+                }
+            }
 
             stage('Setup virtualenv for Pepper') {
                 python.setupPepperVirtualenv(pepperEnv, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
@@ -1521,7 +1543,7 @@ timeout(time: 12, unit: 'HOURS') {
 
             if (merges.contains("log")) {
                 if (salt.testTarget(pepperEnv, LOG_TARGET)) {
-                    mergeSnapshot(pepperEnv, LOG_TARGET. 'log')
+                    mergeSnapshot(pepperEnv, LOG_TARGET, 'log')
                 }
             }
 
@@ -1552,6 +1574,15 @@ timeout(time: 12, unit: 'HOURS') {
             if (RESTORE_CONTRAIL_DB.toBoolean()) {
                 restoreContrailDb(pepperEnv)
                 // verification is already present in restore pipelines
+            }
+
+            if(RUN_CVP_TESTS.toBoolean() == True){
+                stage('Run CVP tests after upgrade.') {
+                    build job: "cvp-sanity"
+                    build job: "cvp-func"
+                    build job: "cvp-ha"
+                    build job: "cvp-perf"
+                }
             }
 
         } catch (Throwable e) {

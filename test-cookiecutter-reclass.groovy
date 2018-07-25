@@ -4,6 +4,11 @@ git = new com.mirantis.mk.Git()
 python = new com.mirantis.mk.Python()
 saltModelTesting = new com.mirantis.mk.SaltModelTesting()
 
+def reclassVersion = 'v1.5.4'
+if (common.validInputParam('RECLASS_VERSION')) {
+  reclassVersion = RECLASS_VERSION
+}
+
 def generateSaltMaster(modEnv, clusterDomain, clusterName) {
     def nodeFile = "${modEnv}/nodes/cfg01.${clusterDomain}.yml"
     def nodeString = """classes:
@@ -76,36 +81,44 @@ def generateModel(modelFile, cutterEnv) {
     generateSaltMaster(generatedModel, clusterDomain, clusterName)
 }
 
-def testModel(modelFile, testEnv) {
-    def templateEnv = "${env.WORKSPACE}"
-    def content = readFile(file: "${templateEnv}/contexts/${modelFile}.yml")
-    def templateContext = readYaml text: content
-    def clusterName = templateContext.default_context.cluster_name
-    def clusterDomain = templateContext.default_context.cluster_domain
-    if (SYSTEM_GIT_URL == "") {
-        git.checkoutGitRepository("${testEnv}/classes/system", RECLASS_MODEL_URL, RECLASS_MODEL_BRANCH, CREDENTIALS_ID)
-    } else {
-        dir("${testEnv}/classes/system") {
-            if (!gerrit.gerritPatchsetCheckout(SYSTEM_GIT_URL, SYSTEM_GIT_REF, "HEAD", CREDENTIALS_ID)) {
-              common.errorMsg("Failed to obtain system reclass with url: ${SYSTEM_GIT_URL} and ${SYSTEM_GIT_REF}")
-            }
-        }
+def testModel(modelFile, testEnv, reclassVersion='v1.5.4') {
+  def templateEnv = "${env.WORKSPACE}"
+  def content = readFile(file: "${templateEnv}/contexts/${modelFile}.yml")
+  def templateContext = readYaml text: content
+  def clusterName = templateContext.default_context.cluster_name
+  def clusterDomain = templateContext.default_context.cluster_domain
+  if (SYSTEM_GIT_URL == "") {
+    git.checkoutGitRepository("${testEnv}/classes/system", RECLASS_MODEL_URL, RECLASS_MODEL_BRANCH, CREDENTIALS_ID)
+  } else {
+    dir("${testEnv}/classes/system") {
+      if (!gerrit.gerritPatchsetCheckout(SYSTEM_GIT_URL, SYSTEM_GIT_REF, "HEAD", CREDENTIALS_ID)) {
+        common.errorMsg("Failed to obtain system reclass with url: ${SYSTEM_GIT_URL} and ${SYSTEM_GIT_REF}")
+      }
     }
+  }
 
-    def nbTry = 0
-    while (nbTry < 5) {
-        nbTry++
-        try {
-            saltModelTesting.setupAndTestNode("cfg01.${clusterDomain}", clusterName, EXTRA_FORMULAS, testEnv, "pkg", DISTRIB_REVISION)
-            break
-        } catch (Exception e) {
-            if (e.getMessage() == "script returned exit code 124") {
-                common.errorMsg("Impossible to test node due to timeout of salt-master, retriggering")
-            } else {
-                throw e
-            }
-        }
-    }
+  def testResult = false
+  def DockerCName = "${env.JOB_NAME.toLowerCase()}_${env.BUILD_TAG.toLowerCase()}"
+  testResult = saltModelTesting.setupAndTestNode(
+      "cfg01.${clusterDomain}",
+      clusterName,
+      EXTRA_FORMULAS,
+      testEnv,
+      'pkg',
+      DISTRIB_REVISION,
+      reclassVersion,
+      0,
+      false,
+      false,
+      '',
+      '',
+      DockerCName)
+  if (testResult) {
+    common.infoMsg("testModel finished: SUCCESS")
+  } else {
+    error('testModel finished: FAILURE')
+    throw new RuntimeException('Test stage finished: FAILURE')
+  }
 
 }
 
@@ -174,13 +187,12 @@ timeout(time: 12, unit: 'HOURS') {
             stage("test-nodes") {
                 def partitions = common.partitionList(contextFileList, PARALLEL_NODE_GROUP_SIZE.toInteger())
                 def buildSteps = [:]
-                for (int i = 0; i < partitions.size(); i++) {
-                    def partition = partitions[i]
+                partitions.eachWithIndex { partition, i ->
                     buildSteps.put("partition-${i}", new HashMap<String,org.jenkinsci.plugins.workflow.cps.CpsClosure2>())
-                    for(int k = 0; k < partition.size; k++){
-                        def basename = sh(script: "basename ${partition[k]} .yml", returnStdout: true).trim()
+                    for(part in partition){
+                        def basename = sh(script: "basename ${part} .yml", returnStdout: true).trim()
                         def testEnv = "${env.WORKSPACE}/model/${basename}"
-                        buildSteps.get("partition-${i}").put(basename, { testModel(basename, testEnv) })
+                        buildSteps.get("partition-${i}").put(basename, { testModel(basename, testEnv, reclassVersion) })
                     }
                 }
                 common.serial(buildSteps)

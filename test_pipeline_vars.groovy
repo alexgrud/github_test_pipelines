@@ -8,27 +8,16 @@ def venv
 def venvPepper
 def outputs = [:]
 def extra_tgt = ""
+def manila_enabled
 node{
-    stage ("Preparing data") {
-        def workspace = common.getWorkspace()
-        venv = "${workspace}/venv"
-        venvPepper = "${workspace}/venvPepper"
-        println("Test message")
-        println(venvPepper)
-        saltMasterHost=SALT_MASTER_HOST
-        SALT_MASTER_URL = "http://${saltMasterHost}:6969"
-        println(SALT_MASTER_URL)
-        SALT_MASTER_CREDENTIALS="salt-qa-credentials"
-        println(SALT_MASTER_CREDENTIALS)
-        
+    stage ("1") {
+      manila_enabled = "True".toBoolean()
     }
-        stage ("installing virtualenv Pepper") {
-          // Setup virtualenv for pepper
-          python.setupPepperVirtualenv(venvPepper, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
+        stage ("2") {
+            if (manila_enabled){
+              println("test passed")
+            }
           }
-        stage ("Running get config") {
-          orchestrate.OrchestrateApplications(venvPepper, "I@salt:master ${extra_tgt}", "orchestration.deploy.applications")
-          
+        stage ("3") {
           }
-         
 }

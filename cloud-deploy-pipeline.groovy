@@ -199,7 +199,7 @@ timeout(time: 12, unit: 'HOURS') {
                             envParams.put('cfg_bootstrap_extra_repo_params', BOOTSTRAP_EXTRA_REPO_PARAMS)
                         }
 
-                        // put extra salt-formulas
+                        // put extra salt-formulas # FIXME: looks like some outdated logic. See #PROD-23127
                         if (common.validInputParam('EXTRA_FORMULAS')) {
                             common.infoMsg("Setting extra salt-formulas to ${EXTRA_FORMULAS}")
                             envParams.put('cfg_extra_formulas', EXTRA_FORMULAS)
@@ -222,6 +222,17 @@ timeout(time: 12, unit: 'HOURS') {
                         if (common.validInputParam('SALT_VERSION')) {
                             common.infoMsg("Setting salt version to ${SALT_VERSION}")
                             envParams.put('cfg_saltversion', SALT_VERSION)
+                        }
+
+                        // If stack wasn't removed by the same user which has created it,
+                        // nova key pair won't be removed, so need to make sure that no
+                        // key pair with the same name exists before creating the stack.
+                        if (openstack.getKeyPair(openstackCloud, STACK_NAME, venv)){
+                            try {
+                                openstack.deleteKeyPair(openstackCloud, STACK_NAME, venv)
+                            } catch (Exception e) {
+                                common.errorMsg("Key pair failed to remove with error ${e.message}")
+                            }
                         }
 
                         openstack.createHeatStack(openstackCloud, STACK_NAME, STACK_TEMPLATE, envParams, HEAT_STACK_ENVIRONMENT, venv)
@@ -336,6 +347,18 @@ timeout(time: 12, unit: 'HOURS') {
                 }
             }
 
+            stage('Install infra') {
+              if (common.checkContains('STACK_INSTALL', 'core') ||
+                    common.checkContains('STACK_INSTALL', 'openstack') ||
+                      common.checkContains('STACK_INSTALL', 'oss')) {
+                  orchestrate.installInfra(venvPepper, extra_tgt)
+              }
+            }
+
+            stage('Install Orchestrated Apps'){
+                orchestrate.OrchestrateApplications(venvPepper, "I@salt:master ${extra_tgt}", "orchestration.deploy.applications")
+            }
+
             // install k8s
             if (common.checkContains('STACK_INSTALL', 'k8s')) {
 
@@ -351,10 +374,8 @@ timeout(time: 12, unit: 'HOURS') {
                     }
 
                     // ensure certificates are generated properly
-                    salt.runSaltProcessStep(venvPepper, "* ${extra_tgt}", 'saltutil.refresh_pillar', [], null, true)
-                    salt.enforceState(venvPepper, "* ${extra_tgt}", ['salt.minion.cert'], true)
-
-                    orchestrate.installKubernetesInfra(venvPepper, extra_tgt)
+                    salt.runSaltProcessStep(venvPepper, "I@kubernetes:* ${extra_tgt}", 'saltutil.refresh_pillar', [], null, true)
+                    salt.enforceState(venvPepper, "I@kubernetes:* ${extra_tgt}", ['salt.minion.cert'], true)
                 }
 
                 if (common.checkContains('STACK_INSTALL', 'contrail')) {
@@ -407,12 +428,7 @@ timeout(time: 12, unit: 'HOURS') {
 
             // install openstack
             if (common.checkContains('STACK_INSTALL', 'openstack')) {
-                // install Infra and control, tests, ...
-
-                stage('Install OpenStack infra') {
-                    orchestrate.installOpenstackInfra(venvPepper, extra_tgt)
-                }
-
+                // install control, tests, ...
                 stage('Install OpenStack control') {
                     orchestrate.installOpenstackControl(venvPepper, extra_tgt)
                 }

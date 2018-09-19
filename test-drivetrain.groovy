@@ -8,6 +8,7 @@
  *   TARGET_MCP_VERSION                            MCP version to upgrade to
  *   FUNC_TEST_SETTINGS                            Settings for functional tests
  *   ENVIRONMENT_IP                                IP of already deployed environment
+ *   DELETE_STACK                                  Option to delete Heat Stack
  */
 
 
@@ -34,10 +35,21 @@ SALTAPI_PASS=${creds.password}
 }
 
 def runJobOnJenkins(jenkinsUrl, userName, password, jobName, parameters){
+    def status = "null"
     def jenkinsDownCmd = "curl -OL ${jenkinsUrl}/jnlpJars/jenkins-cli.jar --output ./jenkins-cli.jar"
-    def runJobFromSaltMasterCmd = "java -jar jenkins-cli.jar -s ${jenkinsUrl} -noKeyAuth -auth admin:${password} build ${jobName} ${parameters} -s | grep -E 'SUCCESS|UNSTABLE'"
+    def runJobFromSaltMasterCmd = "java -jar jenkins-cli.jar -s ${jenkinsUrl} -noKeyAuth -auth ${userName}:${password} build ${jobName} ${parameters} -w"
+    def waitJobFromSaltMasterCmd = "curl -s -X GET '${jenkinsUrl}/job/${jobName}/lastBuild/api/json?tree=result' --user ${userName}:${password} | jq -r '.result'"
     salt.cmdRun(pepperEnv, "I@salt:master", jenkinsDownCmd)
     salt.cmdRun(pepperEnv, "I@salt:master", runJobFromSaltMasterCmd)
+    while (status == "null" || status.contains("parse error")){
+        status = salt.cmdRun(pepperEnv, "I@salt:master", waitJobFromSaltMasterCmd, false)
+        status = status.get("return")[0].values()[0].trim()
+        println("The job ${jobName} result is $status")
+        if(status == "FAILURE"){
+            throw new Exception("The job ${jobName} result is FAILURE.")
+        }
+        sleep(10)
+    }
 }
 
 timeout(time: 12, unit: 'HOURS') {
@@ -48,8 +60,8 @@ timeout(time: 12, unit: 'HOURS') {
             def saltCreds = [:]
             def mcpEnvJobIP
 
-            if(ENVIRONMENT_IP == ""){
-                stage('Trigger deploy job') {
+            stage('Trigger deploy job') {
+                if(ENVIRONMENT_IP == ""){
                     mcpEnvJob = build(job: "create-mcp-env", parameters: [
                         [$class: 'StringParameterValue', name: 'OS_AZ', value: 'mcp-mk'],
                         [$class: 'StringParameterValue', name: 'OS_PROJECT_NAME', value: 'mcp-mk'],
@@ -59,12 +71,11 @@ timeout(time: 12, unit: 'HOURS') {
                         [$class: 'BooleanParameterValue', name: 'RUN_TESTS', value: false],
                         [$class: 'TextParameterValue', name: 'COOKIECUTTER_TEMPLATE_CONTEXT', value: COOKIECUTTER_TEMPLATE_CONTEXT]
                     ])
+                    def mcpEnvJobDesc = mcpEnvJob.getDescription().tokenize(" ")
+                    mcpEnvJobIP = mcpEnvJobDesc[2]
+                }else{
+                    mcpEnvJobIP = ENVIRONMENT_IP
                 }
-
-                def mcpEnvJobDesc = mcpEnvJob.getDescription().tokenize(" ")
-                mcpEnvJobIP = mcpEnvJobDesc[2]
-            }else{
-                mcpEnvJobIP = ENVIRONMENT_IP
             }
 
             def saltMasterUrl = "http://${mcpEnvJobIP}:6969"
@@ -80,8 +91,16 @@ timeout(time: 12, unit: 'HOURS') {
             def stackCicdAddr = saltReturn.get("return")[0].values()[0]
             def jenkinsUrl = "http://${stackCicdAddr}:8081"
 
+            salt.cmdRun(pepperEnv, "I@salt:master", 'cd /srv/salt/reclass && echo -e ".gitignore\\nclasses/service/\\nnodes/_generated/" >> .gitignore')
+            salt.cmdRun(pepperEnv, "I@salt:master", "cd /srv/salt/reclass && git reset --hard")
+            salt.cmdRun(pepperEnv, "I@salt:master", "cd /srv/salt/reclass/classes/system && git reset --hard && git clean -fd")
+
+            //TODO: Temporary fix. Remove the line below after 2a3757a (reclass-system) is in stable tag.
+            salt.cmdRun(pepperEnv, "cid*", "mkdir /etc/aptly", false)
+
             stage('Run CVP before upgrade') {
-                runJobOnJenkins(jenkinsUrl, "admin", stackCicdPassword, "cvp-sanity", "-p TESTS_SET=test_drivetrain.py -p TESTS_SETTINGS='drivetrain_version=\"${SOURCE_MCP_VERSION}\"'")
+                runJobOnJenkins(jenkinsUrl, "admin", stackCicdPassword, "cvp-sanity", "-p TESTS_SET=cvp-sanity-checks/cvp_checks/tests/test_drivetrain.py -p TESTS_SETTINGS='drivetrain_version=\"${SOURCE_MCP_VERSION}\"'")
+                //TODO: Enable functional tests after they become implemented.
                 //runJobOnJenkins(jenkinsUrl, "admin", stackCicdPassword, "cvp-dt-func", "-p SETTINGS=${FUNC_TEST_SETTINGS}")
             }
 
@@ -90,13 +109,21 @@ timeout(time: 12, unit: 'HOURS') {
             }
 
             stage('Run CVP after upgrade') {
-                runJobOnJenkins(jenkinsUrl, "admin", stackCicdPassword, "cvp-sanity", "-p TESTS_SET=test_drivetrain.py -p TESTS_SETTINGS='drivetrain_version=\"${TARGET_MCP_VERSION}\"'")
+                runJobOnJenkins(jenkinsUrl, "admin", stackCicdPassword, "cvp-sanity", "-p TESTS_SET=cvp-sanity-checks/cvp_checks/tests/test_drivetrain.py -p TESTS_SETTINGS='drivetrain_version=\"${TARGET_MCP_VERSION}\"'")
+                //TODO: Enable functional tests after they become implemented.
                 //runJobOnJenkins(jenkinsUrl, "admin", stackCicdPassword, "cvp-dt-func", "-p SETTINGS=${FUNC_TEST_SETTINGS}")
             }
 
         } catch (Throwable e) {
             currentBuild.result = 'FAILURE'
             throw e
+        } finally{
+            if(DELETE_STACK.toBoolean() && ENVIRONMENT_IP == ""){
+                mcpEnvJob = build(job: "delete-heat-stack-for-mcp-env", parameters: [
+                    [$class: 'StringParameterValue', name: 'OS_PROJECT_NAME', value: 'mcp-mk'],
+                    [$class: 'StringParameterValue', name: 'STACK_NAME', value: 'jenkins-drivetrain-test-' + currentBuild.number],
+                ])
+            }
         }
     }
 }

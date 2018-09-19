@@ -46,7 +46,7 @@ def updateSaltStack(target, pkgs){
     }
 
     def saltVersion = salt.getPillar(venvPepper, 'I@salt:master', "_param:salt_version").get("return")[0].values()[0]
-    def saltMinionVersions = salt.cmdRun(venvPepper, "*", "apt-cache policy salt-common |  awk '/Installed/ && /$saltVersion/'").get("return")
+    def saltMinionVersions = salt.cmdRun(venvPepper, target, "apt-cache policy salt-common |  awk '/Installed/ && /$saltVersion/'").get("return")
     def saltMinionVersion = ""
 
     for(minion in saltMinionVersions[0].keySet()){
@@ -64,14 +64,23 @@ def archiveReclassInventory(filename){
     archiveArtifacts artifacts: "$filename"
 }
 
-timeout(time: 12, unit: 'HOURS') {
+def pipelineTimeout = 12
+if (common.validInputParam('PIPELINE_TIMEOUT') && PIPELINE_TIMEOUT.isInteger()) {
+    pipelineTimeout = "${PIPELINE_TIMEOUT}".toInteger()
+}
+
+timeout(time: pipelineTimeout, unit: 'HOURS') {
     node("python") {
         try {
+            def gitMcpVersion = MCP_VERSION
             workspace = common.getWorkspace()
             python.setupPepperVirtualenv(venvPepper, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
 
             if(MCP_VERSION == ""){
                 error("You must specify MCP version")
+            }
+            if(MCP_VERSION == "testing"){
+                gitMcpVersion = "master"
             }
 
             stage("Update Reclass"){
@@ -83,7 +92,11 @@ timeout(time: 12, unit: 'HOURS') {
                     catch(Exception ex){
                         error("You have uncommited changes in your Reclass cluster model repository. Please commit or reset them and rerun the pipeline.")
                     }
+                    def dateTime = common.getDatetime()
                     salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && grep -r --exclude-dir=aptly -l 'apt_mk_version: .*' * | xargs sed -i 's/apt_mk_version: .*/apt_mk_version: \"$MCP_VERSION\"/g'")
+                    common.infoMsg("The following changes were made to the cluster model and will be commited. Please consider if you want to push them to the remote repository or not. You have to do this manually when the run is finished.")
+                    salt.cmdRun(venvPepper, 'I@salt.master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && git diff")
+                    salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/cluster/$cluster_name && git status && git add -u && git commit -m 'Cluster model update to the release $MCP_VERSION on $dateTime'")
                 }
 
                 try{
@@ -92,7 +105,7 @@ timeout(time: 12, unit: 'HOURS') {
                 catch(Exception ex){
                     error("You have unstaged changes in your Reclass system model repository. Please reset them and rerun the pipeline.")
                 }
-                salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/system && git checkout $MCP_VERSION")
+                salt.cmdRun(venvPepper, 'I@salt:master', "cd /srv/salt/reclass/classes/system && git checkout $gitMcpVersion")
             }
 
             if(UPDATE_LOCAL_REPOS.toBoolean()){

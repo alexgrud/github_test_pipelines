@@ -26,6 +26,6 @@ node{
           python.setupPepperVirtualenv(venvPepper, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
           }
         stage ("Running certain stages") {
-          orchestrate.installOpenstackCompute(venvPepper, extra_tgt)
+          salt.enforceState(venvPepper, 'I@keystone:server:role:primary', 'keystone.upgrade.pre')
           }
 }

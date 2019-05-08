@@ -36,8 +36,8 @@ node{
           writeYaml file: "${artifacts_dir}/queens.yml", data: myMap
           def myMap2 = [:]
           myMap2['rocky'] = [:]
-          myMap2['rocky']['keystone'] = 'queens-xenial-20190426084550'
-          myMap2['rocky']['neutron'] = 'queens-xenial-20190426084550'
+          myMap2['rocky']['keystone'] = 'rocky-xenial-20190426084550'
+          myMap2['rocky']['neutron'] = 'rocky-xenial-20190426084550'
           writeYaml file: "${artifacts_dir}/rocky.yml", data: myMap2
           }
         stage('Archive artifacts'){

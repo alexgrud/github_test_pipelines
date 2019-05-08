@@ -33,8 +33,12 @@ node{
           myMap['queens'] = [:]
           myMap['queens']['keystone'] = 'queens-xenial-20190426084537'
           myMap['queens']['neutron'] = 'queens-xenial-20190426084537'
-          //sh "rm ${artifacts_dir}/queens.txt"
-          writeYaml file: "${artifacts_dir}/queens.txt", data: myMap
+          writeYaml file: "${artifacts_dir}/queens.yml", data: myMap
+          def myMap2 = [:]
+          myMap['rocky'] = [:]
+          myMap['rocky']['keystone'] = 'queens-xenial-20190426084550'
+          myMap['rocky']['neutron'] = 'queens-xenial-20190426084550'
+          writeYaml file: "${artifacts_dir}/rocky.yml", data: myMap2
           }
         stage('Archive artifacts'){
           archiveArtifacts allowEmptyArchive: true, artifacts: "${artifacts_dir}/*", excludes: null

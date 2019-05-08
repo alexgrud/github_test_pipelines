@@ -1,7 +1,7 @@
 /**
 Expected parameters:
 SALT_MASTER_HOST
-/*
+*/
 common = new com.mirantis.mk.Common()
 python = new com.mirantis.mk.Python()
 orchestrate = new com.mirantis.mk.Orchestrate()

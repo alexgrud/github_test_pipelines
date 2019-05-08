@@ -9,6 +9,7 @@ def venvPepper
 def outputs = [:]
 def extra_tgt = ""
 node{
+    def artifacts_dir = '_artifacts/'
     stage ("Preparing data") {
         def workspace = common.getWorkspace()
         venv = "${workspace}/venv"
@@ -26,6 +27,19 @@ node{
           python.setupPepperVirtualenv(venvPepper, SALT_MASTER_URL, SALT_MASTER_CREDENTIALS)
           }
         stage ("Running certain stages") {
-          salt.enforceState(venvPepper, 'I@keystone:server:role:primary', 'keystone.upgrade.pre')
+          //salt.enforceState(venvPepper, 'I@keystone:server:role:primary', 'keystone.upgrade.pre')
+          sh "mkdir -p ${artifacts_dir}"
+          def myMap = [:]
+          myMap['queens'] = [:]
+          myMap['queens']['keystone'] = 'queens-xenial-20190426084537'
+          myMap['queens']['neutron'] = 'queens-xenial-20190426084537'
+          //sh "rm ${artifacts_dir}/queens.txt"
+          writeYaml file: "${artifacts_dir}/queens.txt", data: myMap
           }
+        stage('Archive artifacts'){
+          archiveArtifacts allowEmptyArchive: true, artifacts: "${artifacts_dir}/*", excludes: null
+        }
+        stage('Cleanup') {
+          deleteDir()
+        }
 }

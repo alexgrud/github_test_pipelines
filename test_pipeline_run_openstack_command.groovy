@@ -2,7 +2,7 @@ common = new com.mirantis.mk.Common()
 python = new com.mirantis.mk.Python()
 salt = new com.mirantis.mk.Salt()
 git = new com.mirantis.mk.Git()
-openstack = new com.mirantis.mk.Openstack_test()
+openstack = new com.mirantis.mk.Openstack()
 
 
 node{
@@ -65,7 +65,7 @@ node{
             def keypairs = openstack.runOpenstackCommand("openstack keypair list -f value -c Name", rcFile, openstackEnv).tokenize('\n')
             println(keypairs)
             for (keypair in keypairs) {
-                if (keypair.startsWith("sgarbuz")) {
+                if (keypair.startsWith("sturivniy")) {
                     openstack.deleteKeyPair(rcFile, keypair, openstackEnv)
                 }
             }

@@ -1,5 +1,3 @@
-// Expected parameters:
-//   SALT_MASTER_HOST
 common = new com.mirantis.mk.Common()
 python = new com.mirantis.mk.Python()
 salt = new com.mirantis.mk.Salt()
@@ -15,13 +13,10 @@ node{
     def openstackEnv = "${workspace}/venv"
     def failedBuildResult = 'FAILURE'
 
-    openstackEnvironment = "imc-us"
-    openstackProjectName = "oscore-team"
-    //UNCOMMENT!
-    //stackName = env.CLUSTER_NAME
+    openstackEnvironment = env.OPENSTACK_ENVIRONMENT
+    openstackProjectName = env.OS_PROJECT_NAME
 
-    //REMOVE!
-    stackName = "sgarbuz-deploy-heat-virtual-mcp11-aio-27547"
+    stackName = "ogrudev-test5"
     GERRIT_CREDENTIALS_ID = "mcp-ci-gerrit"
 
     def os_openrc = ["OS_PROJECT_NAME": openstackProjectName]
